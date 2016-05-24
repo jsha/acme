@@ -777,7 +777,7 @@ Host: example.com
 ~~~~~~~~~~
 
 The server MUST ignore any values provided in the "key", "authorizations", and
-"certificates" fields in registration bodies sent by the client, as well as any
+"certificates" fields in new-reg bodies sent by the client, as well as any
 other fields that it does not recognize.  If new fields are specified in the
 future, the specification of those fields MUST describe whether they may be
 provided by the client.
@@ -823,9 +823,8 @@ Link: <https://example.com/acme/some-directory>;rel="directory"
 
 If the client wishes to update this information in the future, it sends a POST
 request with updated information to the registration URI.  The server MUST
-ignore any updates to the "key", "authorizations, or "certificates" fields, and
-MUST verify that the request is signed with the private key corresponding to the
-"key" field of the request before updating the registration.
+ignore any updates to the "authorizations" and "certificates" fields, and
+MUST verify that the request is signed with the account's private key.
 
 For example, to update the contact information in the above registration, the
 client could send the following request:
@@ -856,26 +855,15 @@ new registration, to allow a client to retrieve the "new-authorization" and
 ### Account Key Roll-over
 
 A client may wish to change the public key that is associated with a
-registration, e.g., in order to mitigate the risk of key compromise.  To do
-this, the client first constructs a JSON object representing a request to
-update the registration:
+registration in order to recover from a key compromise or proactively mitigate
+the impact of an unnoticed key compromise.
 
-resource (required, string):
-: The string "reg", indicating an update to the registration.
-
-oldKey (required, string):
-: The JWK thumbprint of the old key {{RFC7638}}, base64url-encoded
-
-~~~~~~~~~~
-{
-  "resource": "reg",
-  "oldKey": "D7J9RL1f-RWUl68JP-gW1KSl2TkIrJB7hK6rLFFeYMU"
-}
-~~~~~~~~~~
-
-The client signs this object with the new key pair and encodes the object and
-signature as a JWS.  The client then sends this JWS to the server in the
-"newKey" field of a request to update the registration.
+To change the key associate with an account, the client POSTs a registration
+update with a "key" field containing a JWK representation of the new public key.
+The JWS of this POST must have two signatures: one signature from the existing
+key on the account, and one signature from the new key that the client proposes
+to use. This demonstrates that the client actually has control of the
+private key corresponding to the new public key.
 
 ~~~~~~~~~~
 POST /acme/reg/asdf HTTP/1.1
@@ -883,29 +871,24 @@ Host: example.com
 
 {
   "resource": "reg",
-  "newKey": /* JSON object signed as JWS with new key */
+  "key": /* JSON object signed as JWS with new key */
 }
 /* Signed as JWS with original key */
 ~~~~~~~~~~
 
-On receiving a request to the registration URL with the "newKey" attribute set,
-the server MUST perform the following steps:
+On receiving a request to the registration URL with the "key" attribute set,
+the server MUST perform the following steps in addition to the typical JWS
+validation:
 
-1. Check that the contents of the "newKey" attribute are a valid JWS
-2. Check that the "newKey" JWS verifies using the key in the "jwk" header
-   parameter of the JWS
-3. Check that the payload of the JWS is a valid JSON object
-4. Check that the "resource" field of the object has the value "reg"
-5. Check that the "oldKey" field of the object contains the JWK thumbprint of
-   the account key for this registration
+1. Check that there are two signatures on the JWS.
+2. Check that one signature validates using the existing account key.
+3. Check that one signature validates using the new account key.
+4. Check that the new account key meets requirements for key strength and is not
+   identical to any existing account key.
 
 If all of these checks pass, then the server updates the registration by
-replacing the old account key with the public key carried in the "jwk" header
-parameter of the "newKey" JWS object.
-
-If the update was successful, then the server sends a response with status code
-200 (OK) and the updated registration object as its body.  If the update was not
-successful, then the server responds with an error status code and a problem
+replacing the old account key with the new public key and returns status code
+200. Otherwise, the server responds with an error status code and a problem
 document describing the error.
 
 ### Deleting an Account
