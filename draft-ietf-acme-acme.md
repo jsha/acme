@@ -1259,10 +1259,11 @@ server accepts the deactivation request, it replies with a 200 (OK) status code
 and the current contents of the account object.
 
 Once an account is deactivated, the server MUST NOT accept further requests
-authorized by that account's key. It is up to server policy how long to retain
-data related to that account, whether to revoke certificates issued by that
-account, and whether to send email to that account's contacts. ACME does not
-provide a way to reactivate a deactivated account.
+authorized by that account's key. ACME does not provide a way to reactivate
+a deactivated account.
+
+The server MUST NOT automatically revoke certificates as a result of account
+deactivation.
 
 ## Applying for Certificate Issuance
 
